@@ -124,6 +124,7 @@
         <p class="text-muted mb-2" style="font-size:0.82rem;">
           All values in TWh (terawatt-hours) of primary energy consumption.
         </p>
+
         <div class="prediction-grid">
           {% for model_key, pred_val in prediction.items() %}
           <div class="pred-card {% if loop.first %}highlight{% endif %}">
@@ -137,6 +138,16 @@
             </div>
             <div class="pred-unit">TWh</div>
           </div>
+          {% endfor %}
+        </div>
+
+        <!-- Hidden data elements read by JS -->
+        <div id="chart-data" style="display:none;">
+          {% for model_key, pred_val in prediction.items() %}
+          <span
+            data-model="{{ model_display.get(model_key, model_key) }}"
+            data-value="{{ pred_val if pred_val is number else 0 }}">
+          </span>
           {% endfor %}
         </div>
 
@@ -169,15 +180,15 @@
 {% if prediction %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-  const predictions = {{ prediction | tojson }};
-  const modelDisplay = {{ model_display | tojson }};
-  const labels = Object.keys(predictions).map(k => modelDisplay[k] || k);
-  const values = Object.values(predictions).map(v => typeof v === 'number' ? v : 0);
+  // Read data from DOM elements — no inline JSON injection needed
+  const spans = document.querySelectorAll('#chart-data span');
+  const labels = Array.from(spans).map(s => s.dataset.model);
+  const values = Array.from(spans).map(s => parseFloat(s.dataset.value) || 0);
 
   new Chart(document.getElementById('predChart'), {
     type: 'bar',
     data: {
-      labels,
+      labels: labels,
       datasets: [{
         label: 'Predicted Energy (TWh)',
         data: values,
@@ -189,13 +200,19 @@
       responsive: true,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toLocaleString()} TWh` } }
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return ' ' + ctx.raw.toLocaleString() + ' TWh';
+            }
+          }
+        }
       },
       scales: {
         x: { grid: { display: false }, ticks: { font: { size: 10 } } },
         y: {
           grid: { color: '#e8eef5' },
-          ticks: { font: { size: 10 }, callback: v => v.toLocaleString() }
+          ticks: { font: { size: 10 }, callback: function(v) { return v.toLocaleString(); } }
         }
       }
     }
