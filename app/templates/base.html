@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Energy ML Dashboard{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="brand">
+      <div class="brand-title">World Energy Consumption</div>
+      <div class="brand-sub">ML Regression Comparison &mdash; MSc AI Project</div>
+    </div>
+    <nav>
+      <a href="/" class="{% if active_page == 'home' %}active{% endif %}">Overview</a>
+      <a href="/results" class="{% if active_page == 'results' %}active{% endif %}">Results</a>
+      <a href="/predict" class="{% if active_page == 'predict' %}active{% endif %}">Predict</a>
+      <a href="/eda" class="{% if active_page == 'eda' %}active{% endif %}">EDA</a>
+      <a href="/map" class="{% if active_page == 'map' %}active{% endif %}">World Map</a>
+    </nav>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

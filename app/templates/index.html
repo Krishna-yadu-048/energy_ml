@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% set active_page = "home" %}
+
+{% block title %}Overview — Energy ML Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <div class="hero">
+    <h1>Predicting Global Energy<br>Consumption with Machine Learning</h1>
+    <p>
+      A comparison of six regression models trained on the Our World in Data
+      World Energy Consumption dataset — 218 countries, 1990–2022.
+    </p>
+    <div class="hero-tags">
+      <span class="tag">Ridge Regression</span>
+      <span class="tag">SVR</span>
+      <span class="tag">Random Forest</span>
+      <span class="tag">Gradient Boosting</span>
+      <span class="tag">Gaussian Process</span>
+      <span class="tag">MLP</span>
+    </div>
+  </div>
+
+  <!-- Quick stats row -->
+  <div class="grid-4 mb-2">
+    <div class="metric-card">
+      <div class="metric-label">Countries</div>
+      <div class="metric-value">218</div>
+      <div class="metric-name">after filtering aggregates</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Time Period</div>
+      <div class="metric-value">33 yrs</div>
+      <div class="metric-name">1990 – 2022</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Features Used</div>
+      <div class="metric-value">12</div>
+      <div class="metric-name">after leakage removal</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Models</div>
+      <div class="metric-value">6</div>
+      <div class="metric-name">across 4 paradigm families</div>
+    </div>
+  </div>
+
+  <!-- Overview cards -->
+  <div class="grid-2 mt-3">
+
+    <div class="card">
+      <div class="card-title">Problem Setup</div>
+      <p style="font-size:0.88rem; color: var(--text); line-height:1.7;">
+        The task is to predict a country's <strong>primary energy consumption</strong> (in TWh)
+        given macroeconomic indicators, fuel production figures, and electricity mix data.
+        Models are trained on 1990–2012 data and evaluated on the held-out 2018–2022 test set
+        using a time-based split to avoid look-ahead bias.
+      </p>
+      <div class="callout mt-2">
+        Target variable is <span class="text-mono">log(primary_energy_consumption + 1)</span>
+        during training — predictions are inverted to TWh for evaluation and display.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Data Pipeline</div>
+      <p style="font-size:0.88rem; color: var(--text); line-height:1.7; margin-bottom: 0.8rem;">
+        The raw dataset (22,012 rows, 129 columns) was cleaned down to a usable 12-feature
+        matrix through:
+      </p>
+      <ul style="font-size:0.84rem; padding-left:1.2rem; line-height:2;">
+        <li>Temporal filter → 1990–2022</li>
+        <li>Entity filter → real countries only (by ISO code)</li>
+        <li>Leakage removal → no direct sub-components of target</li>
+        <li>KNN imputation (k=5) for remaining missing values</li>
+        <li>Log transforms for skewed features</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Evaluation Metrics</div>
+      <p style="font-size:0.88rem; margin-bottom:0.75rem;">
+        Four complementary metrics are used on the original TWh scale:
+      </p>
+      <table style="width:100%; font-size:0.82rem; border-collapse:collapse;">
+        <tr style="background:var(--navy-light);">
+          <th style="padding:0.4rem 0.6rem; text-align:left; color:var(--navy);">Metric</th>
+          <th style="padding:0.4rem 0.6rem; text-align:left; color:var(--navy);">What it captures</th>
+        </tr>
+        <tr><td style="padding:0.35rem 0.6rem; font-family:var(--font-mono);">RMSE</td><td style="padding:0.35rem 0.6rem;">Penalises large errors heavily</td></tr>
+        <tr style="background:var(--navy-light);"><td style="padding:0.35rem 0.6rem; font-family:var(--font-mono);">MAE</td><td style="padding:0.35rem 0.6rem;">Average absolute error, robust to outliers</td></tr>
+        <tr><td style="padding:0.35rem 0.6rem; font-family:var(--font-mono);">R²</td><td style="padding:0.35rem 0.6rem;">Proportion of variance explained</td></tr>
+        <tr style="background:var(--navy-light);"><td style="padding:0.35rem 0.6rem; font-family:var(--font-mono);">MAPE</td><td style="padding:0.35rem 0.6rem;">Relative % error — scale-independent</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Feature Set</div>
+      <p style="font-size:0.84rem; margin-bottom:0.75rem; color:var(--muted);">
+        12 features in 4 groups:
+      </p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; font-size:0.78rem;">
+        <div>
+          <div style="font-weight:600; color:var(--navy); margin-bottom:0.3rem; text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em;">Scale</div>
+          <code>log_population</code><br>
+          <code>log_gdp</code>
+        </div>
+        <div>
+          <div style="font-weight:600; color:var(--navy); margin-bottom:0.3rem; text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em;">Electricity</div>
+          <code>log_electricity_generation</code><br>
+          <code>renewables_share_elec</code><br>
+          <code>fossil_share_elec</code><br>
+          <code>solar/wind/hydro_share_elec</code>
+        </div>
+        <div>
+          <div style="font-weight:600; color:var(--navy); margin-bottom:0.3rem; text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em;">Production</div>
+          <code>coal_production</code><br>
+          <code>oil_production</code><br>
+          <code>gas_production</code>
+        </div>
+        <div>
+          <div style="font-weight:600; color:var(--navy); margin-bottom:0.3rem; text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em;">Temporal</div>
+          <code>year_norm</code>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {% if results %}
+  <div class="mt-3">
+    <div class="card">
+      <div class="card-title">Quick Results Snapshot</div>
+      <p class="text-muted mb-2">Best R² achieved on the 2018–2022 held-out test set. <a href="/results">See full results →</a></p>
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>RMSE (TWh)</th>
+            <th>MAE (TWh)</th>
+            <th>R²</th>
+            <th>MAPE (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for key, metrics in results.items() %}
+          <tr>
+            <td>{{ model_display.get(key, key) }}</td>
+            <td>{{ "{:,.1f}".format(metrics.RMSE) }}</td>
+            <td>{{ "{:,.1f}".format(metrics.MAE) }}</td>
+            <td>{{ metrics.R2 }}</td>
+            <td>{{ metrics.MAPE }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="callout amber mt-3">
+    Models have not been trained yet. Run <code>python app/train_models.py</code> from the project root to train all models.
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

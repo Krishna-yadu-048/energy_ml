@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% set active_page = "predict" %}
+
+{% block title %}Predict — Energy ML Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <div class="page-header">
+    <h1>Live Prediction</h1>
+    <p>Enter a country's characteristics and all six trained models will return an energy consumption estimate.</p>
+  </div>
+
+  <div class="grid-2" style="align-items: start;">
+
+    <!-- Input form -->
+    <div class="card">
+      <div class="card-title">Input Features</div>
+
+      <form method="POST" action="/predict">
+
+        <div class="form-grid">
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label>Country <span>(for reference only)</span></label>
+            <select name="country">
+              {% for c in countries %}
+              <option value="{{ c }}" {% if input_country == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Year</label>
+            <input type="number" name="year" min="1990" max="2022"
+                   value="{{ input_year or 2020 }}" required>
+          </div>
+
+          <div class="form-section-title">Scale</div>
+
+          <div class="form-group">
+            <label>Population <span>(total)</span></label>
+            <input type="number" name="population" min="0" step="1000"
+                   value="67000000" required>
+          </div>
+
+          <div class="form-group">
+            <label>GDP <span>(USD, current)</span></label>
+            <input type="number" name="gdp" min="0" step="1000000"
+                   value="2800000000000" required>
+          </div>
+
+          <div class="form-section-title">Electricity Generation</div>
+
+          <div class="form-group">
+            <label>Electricity Generated <span>(TWh)</span></label>
+            <input type="number" name="electricity_gen" min="0" step="1"
+                   value="340" required>
+          </div>
+
+          <div class="form-group">
+            <label>Renewables Share <span>(%)</span></label>
+            <input type="number" name="renewables_share" min="0" max="100" step="0.1"
+                   value="25" required>
+          </div>
+
+          <div class="form-group">
+            <label>Fossil Fuel Share <span>(%)</span></label>
+            <input type="number" name="fossil_share" min="0" max="100" step="0.1"
+                   value="65" required>
+          </div>
+
+          <div class="form-group">
+            <label>Solar Share <span>(%)</span></label>
+            <input type="number" name="solar_share" min="0" max="100" step="0.1"
+                   value="3">
+          </div>
+
+          <div class="form-group">
+            <label>Wind Share <span>(%)</span></label>
+            <input type="number" name="wind_share" min="0" max="100" step="0.1"
+                   value="8">
+          </div>
+
+          <div class="form-group">
+            <label>Hydro Share <span>(%)</span></label>
+            <input type="number" name="hydro_share" min="0" max="100" step="0.1"
+                   value="12">
+          </div>
+
+          <div class="form-section-title">Fuel Production</div>
+
+          <div class="form-group">
+            <label>Coal Production <span>(TWh)</span></label>
+            <input type="number" name="coal_prod" min="0" step="1" value="0">
+          </div>
+
+          <div class="form-group">
+            <label>Oil Production <span>(TWh)</span></label>
+            <input type="number" name="oil_prod" min="0" step="1" value="0">
+          </div>
+
+          <div class="form-group">
+            <label>Gas Production <span>(TWh)</span></label>
+            <input type="number" name="gas_prod" min="0" step="1" value="0">
+          </div>
+
+        </div>
+
+        <div class="mt-3">
+          <button type="submit" class="btn btn-primary w-full">Run All Models →</button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- Results panel -->
+    <div>
+      {% if prediction %}
+      <div class="card">
+        <div class="card-title">
+          Predictions — {{ input_country }}, {{ input_year }}
+        </div>
+        <p class="text-muted mb-2" style="font-size:0.82rem;">
+          All values in TWh (terawatt-hours) of primary energy consumption.
+        </p>
+        <div class="prediction-grid">
+          {% for model_key, pred_val in prediction.items() %}
+          <div class="pred-card {% if loop.first %}highlight{% endif %}">
+            <div class="pred-model">{{ model_display.get(model_key, model_key) }}</div>
+            <div class="pred-value">
+              {% if pred_val is number %}
+                {{ "{:,.1f}".format(pred_val) }}
+              {% else %}
+                {{ pred_val }}
+              {% endif %}
+            </div>
+            <div class="pred-unit">TWh</div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Prediction bar chart -->
+        <div class="mt-3">
+          <canvas id="predChart" height="200"></canvas>
+        </div>
+      </div>
+
+      {% else %}
+      <div class="card" style="background: var(--navy-light); border-style: dashed;">
+        <p style="text-align:center; color:var(--muted); padding: 3rem 1rem; font-size:0.9rem;">
+          Fill in the form and click <strong>Run All Models</strong> to see predictions.
+        </p>
+      </div>
+
+      <div class="callout mt-2">
+        <strong>Default values</strong> are pre-filled with approximate figures for a
+        mid-sized European economy. You can look up real values for any country from the
+        <a href="https://ourworldindata.org/energy" target="_blank">Our World in Data energy page</a>.
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if prediction %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  const predictions = {{ prediction | tojson }};
+  const modelDisplay = {{ model_display | tojson }};
+  const labels = Object.keys(predictions).map(k => modelDisplay[k] || k);
+  const values = Object.values(predictions).map(v => typeof v === 'number' ? v : 0);
+
+  new Chart(document.getElementById('predChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Predicted Energy (TWh)',
+        data: values,
+        backgroundColor: '#2c4a6e',
+        borderRadius: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toLocaleString()} TWh` } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: {
+          grid: { color: '#e8eef5' },
+          ticks: { font: { size: 10 }, callback: v => v.toLocaleString() }
+        }
+      }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

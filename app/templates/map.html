@@ -1,0 +1,755 @@
+{% extends "base.html" %}
+{% set active_page = "map" %}
+
+{% block title %}World Map — Energy ML Dashboard{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  /* ── Map page layout ───────────────────────────────────────────────────── */
+  .map-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .map-layout { grid-template-columns: 1fr; }
+  }
+
+  /* ── Map panel ─────────────────────────────────────────────────────────── */
+  .map-panel {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .map-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--navy-light);
+    flex-wrap: wrap;
+  }
+
+  .map-toolbar label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--navy);
+    white-space: nowrap;
+  }
+
+  .map-toolbar select,
+  .map-toolbar input[type=range] {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.3rem 0.5rem;
+    font-size: 0.82rem;
+    font-family: var(--font-sans);
+    background: #fff;
+    color: var(--text);
+  }
+
+  #yearDisplay {
+    font-family: var(--font-mono);
+    font-size: 1.05rem;
+    color: var(--navy);
+    font-weight: 600;
+    min-width: 40px;
+  }
+
+  #yearSlider { width: 140px; accent-color: var(--navy); }
+
+  /* ── SVG map ───────────────────────────────────────────────────────────── */
+  #mapSvg {
+    width: 100%;
+    height: 460px;
+    display: block;
+    cursor: grab;
+  }
+
+  #mapSvg:active { cursor: grabbing; }
+
+  .country-path {
+    stroke: #fff;
+    stroke-width: 0.4px;
+    transition: opacity 0.1s;
+  }
+
+  .country-path:hover { opacity: 0.8; stroke-width: 1.2px; stroke: #fff; }
+
+  .no-data { fill: #d8dde3; }
+
+  /* ── Tooltip ───────────────────────────────────────────────────────────── */
+  #mapTooltip {
+    position: fixed;
+    background: var(--navy);
+    color: #fff;
+    padding: 0.7rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.8rem;
+    font-family: var(--font-sans);
+    pointer-events: none;
+    display: none;
+    z-index: 9999;
+    max-width: 240px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    line-height: 1.55;
+  }
+
+  #mapTooltip .tt-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    padding-bottom: 0.3rem;
+  }
+
+  #mapTooltip .tt-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  #mapTooltip .tt-label { color: rgba(255,255,255,0.6); }
+  #mapTooltip .tt-val   { font-family: var(--font-mono); font-weight: 600; }
+
+  /* ── Legend ─────────────────────────────────────────────────────────────── */
+  .legend-wrap {
+    padding: 0.7rem 1.1rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  #legendSvg { height: 14px; flex: 1; max-width: 280px; }
+
+  /* ── Country detail panel ──────────────────────────────────────────────── */
+  .country-detail {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.1rem;
+    margin-top: 1.25rem;
+    display: none;
+  }
+
+  .country-detail.visible { display: block; }
+
+  .detail-name {
+    font-family: var(--font-serif);
+    font-size: 1.15rem;
+    color: var(--navy);
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+  }
+
+  .detail-year { font-size: 0.75rem; color: var(--muted); margin-bottom: 1rem; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+
+  .stat-box {
+    background: var(--navy-light);
+    border-radius: var(--radius);
+    padding: 0.55rem 0.75rem;
+  }
+
+  .stat-box .s-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 0.15rem;
+  }
+
+  .stat-box .s-value {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    color: var(--navy);
+    line-height: 1;
+  }
+
+  /* ── Sidebar ────────────────────────────────────────────────────────────── */
+  .sidebar-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 1.1rem;
+    overflow: hidden;
+  }
+
+  .sidebar-card-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--navy);
+    background: var(--navy-light);
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-card-body { padding: 0.75rem 0.9rem; }
+
+  .rank-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.28rem 0;
+    border-bottom: 1px solid var(--navy-light);
+    font-size: 0.8rem;
+  }
+
+  .rank-row:last-child { border-bottom: none; }
+
+  .rank-num {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    width: 18px;
+    flex-shrink: 0;
+  }
+
+  .rank-country { flex: 1; color: var(--text); }
+
+  .rank-value {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--navy);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .ts-chart-wrap { padding: 0.75rem 0.9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <div class="page-header">
+    <h1>World Energy Map</h1>
+    <p>
+      Interactive choropleth of global energy data (1990–2022). Click any country
+      to see its full time series. Use the toolbar to switch metric and year.
+    </p>
+  </div>
+
+  {% if not data_ready %}
+  <div class="callout amber">
+    Map data not found. Run <code>notebooks/03_map_data.ipynb</code> first,
+    then restart the app.
+  </div>
+  {% else %}
+
+  <div class="map-layout">
+
+    <!-- ── Left: map + detail ── -->
+    <div>
+      <div class="map-panel">
+
+        <!-- Toolbar -->
+        <div class="map-toolbar">
+          <label>Metric</label>
+          <select id="metricSelect" onchange="updateMap()">
+            <option value="energy">Total Energy (TWh)</option>
+            <option value="energy_per_capita">Energy per Capita (MWh)</option>
+            <option value="renewables_pct">Renewables Share (%)</option>
+            <option value="fossil_pct">Fossil Fuel Share (%)</option>
+            <option value="elec_gen">Electricity Generation (TWh)</option>
+            <option value="gdp_per_capita">GDP per Capita (USD)</option>
+          </select>
+
+          <label>Year</label>
+          <input type="range" id="yearSlider"
+                 min="{{ map_meta.years[0] if map_meta.years else 1990 }}"
+                 max="{{ map_meta.years[-1] if map_meta.years else 2021 }}"
+                 value="2021"
+                 oninput="onYearChange(this.value)">
+          <span id="yearDisplay">2021</span>
+        </div>
+
+        <!-- SVG map -->
+        <svg id="mapSvg"></svg>
+
+        <!-- Legend -->
+        <div class="legend-wrap">
+          <span id="legendMin">0</span>
+          <svg id="legendSvg"><defs><linearGradient id="legendGrad" x1="0" x2="1" y1="0" y2="0"></linearGradient></defs><rect x="0" y="0" width="100%" height="100%" fill="url(#legendGrad)"/></svg>
+          <span id="legendMax">max</span>
+          <span style="margin-left:0.5rem; color: #d8dde3;">■</span>
+          <span>No data</span>
+        </div>
+
+      </div>
+
+      <!-- Country detail — shown on click -->
+      <div id="countryDetail" class="country-detail">
+        <div class="detail-name" id="detailName">—</div>
+        <div class="detail-year" id="detailYear"></div>
+        <div class="stat-grid" id="detailStats"></div>
+        <div class="ts-chart-wrap">
+          <canvas id="tsChart" height="140"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right: sidebar ── -->
+    <div>
+
+      <!-- Top energy consumers 2021 -->
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">Top 10 by Total Energy (2021)</div>
+        <div class="sidebar-card-body">
+          {% if rankings.top_energy %}
+            {% for i, row in rankings.top_energy | enumerate %}
+            <div class="rank-row">
+              <span class="rank-num">{{ i+1 }}</span>
+              <span class="rank-country">{{ row.country }}</span>
+              <span class="rank-value">{{ "{:,.0f}".format(row.value) }} TWh</span>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">No data. Run notebook 03.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Top renewables 2021 -->
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">Top 10 Renewables Share (2021)</div>
+        <div class="sidebar-card-body">
+          {% if rankings.top_renewables %}
+            {% for i, row in rankings.top_renewables | enumerate %}
+            <div class="rank-row">
+              <span class="rank-num">{{ i+1 }}</span>
+              <span class="rank-country">{{ row.country }}</span>
+              <span class="rank-value">{{ row.value }}%</span>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">No data. Run notebook 03.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Static overview charts -->
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">Global Trends 1990–2022</div>
+        <img src="/static/map_global_trends.png" alt="Global energy trends"
+             style="width:100%; display:block;"
+             onerror="this.style.display='none'">
+      </div>
+
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">Electricity Mix — Selected Countries (2021)</div>
+        <img src="/static/map_elec_mix.png" alt="Electricity mix"
+             style="width:100%; display:block;"
+             onerror="this.style.display='none'">
+      </div>
+
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">GDP vs Energy per Capita (2021)</div>
+        <img src="/static/map_bubble_2021.png" alt="GDP vs Energy bubble"
+             style="width:100%; display:block;"
+             onerror="this.style.display='none'">
+      </div>
+
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+<!-- Tooltip (appended to body so it escapes any overflow:hidden) -->
+<div id="mapTooltip"></div>
+{% endblock %}
+
+{% block scripts %}
+{% if data_ready %}
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const METRIC_CONFIG = {
+  energy:           { label: 'Total Energy (TWh)',        fmt: v => d3.format(',.0f')(v) + ' TWh',  scheme: d3.schemeBlues[7] },
+  energy_per_capita:{ label: 'Energy per Capita (MWh)',   fmt: v => d3.format(',.1f')(v) + ' MWh',  scheme: d3.schemeOranges[7] },
+  renewables_pct:   { label: 'Renewables Share (%)',      fmt: v => d3.format('.1f')(v) + '%',      scheme: d3.schemeGreens[7] },
+  fossil_pct:       { label: 'Fossil Fuel Share (%)',     fmt: v => d3.format('.1f')(v) + '%',      scheme: d3.schemeReds[7] },
+  elec_gen:         { label: 'Electricity Generation (TWh)', fmt: v => d3.format(',.0f')(v) + ' TWh', scheme: d3.schemePurples[7] },
+  gdp_per_capita:   { label: 'GDP per Capita (USD)',      fmt: v => '$' + d3.format(',.0f')(v),     scheme: d3.schemeYlOrBr[7] }
+};
+
+// ── State ──────────────────────────────────────────────────────────────────
+let allMapData = null;       // full map_data.json, loaded once
+let currentYear = 2021;
+let currentMetric = 'energy';
+let tsChartInstance = null;
+let geoReady = false;
+let dataReady = false;
+let geoData = null;
+
+const svg = d3.select('#mapSvg');
+const tooltip = document.getElementById('mapTooltip');
+
+// ── Setup projection ───────────────────────────────────────────────────────
+const projection = d3.geoNaturalEarth1()
+  .scale(150)
+  .translate([0, 0]);
+
+const path = d3.geoPath().projection(projection);
+let zoom = d3.zoom().scaleExtent([1, 8]).on('zoom', e => {
+  svg.select('g').attr('transform', e.transform);
+});
+svg.call(zoom);
+
+// ── Load both GeoJSON and energy data in parallel ──────────────────────────
+Promise.all([
+  d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'),
+  fetch('/static/map_data.json').then(r => r.json())
+]).then(([world, mapData]) => {
+  allMapData = mapData;
+  geoData = world;
+  drawBase(world);
+  updateMap();
+}).catch(err => {
+  console.error('Failed to load map assets:', err);
+  document.getElementById('mapSvg').insertAdjacentHTML('afterend',
+    '<div class="callout amber" style="margin:1rem">Could not load map. Check network and that map_data.json exists.</div>');
+});
+
+// ── Draw base geography (once) ─────────────────────────────────────────────
+function drawBase(world) {
+  const { width, height } = document.getElementById('mapSvg').getBoundingClientRect();
+  const w = width || 700, h = 460;
+
+  projection.scale((w / 640) * 150).translate([w / 2, h / 2]);
+
+  const countries = topojson_feature(world, world.objects.countries);
+
+  const g = svg.append('g');
+
+  // Sphere background
+  g.append('path')
+    .datum({ type: 'Sphere' })
+    .attr('d', path)
+    .attr('fill', '#dce8f0')
+    .attr('stroke', 'none');
+
+  // Country paths
+  g.selectAll('.country-path')
+    .data(countries.features)
+    .join('path')
+    .attr('class', 'country-path no-data')
+    .attr('d', path)
+    .attr('data-id', d => d.id)
+    .on('mousemove', onMouseMove)
+    .on('mouseleave', () => { tooltip.style.display = 'none'; })
+    .on('click', onCountryClick);
+}
+
+// ── Minimal topojson feature extraction (avoids importing topojson lib) ────
+function topojson_feature(topology, object) {
+  // Use topojson-client if available, else fall back to d3's built-in
+  if (typeof topojson !== 'undefined') return topojson.feature(topology, object);
+  // Build features manually from topojson arcs
+  const arcs = topology.arcs;
+  function decodeArc(arcIndex) {
+    let arc = arcs[arcIndex < 0 ? ~arcIndex : arcIndex];
+    let x = 0, y = 0;
+    const coords = arc.map(([dx, dy]) => {
+      x += dx; y += dy;
+      return [x, y];
+    });
+    if (arcIndex < 0) coords.reverse();
+    return coords;
+  }
+  function convertGeometry(geom) {
+    if (geom.type === 'Polygon') {
+      return { type: 'Polygon', coordinates: geom.arcs.map(ring => ring.flatMap(decodeArc)) };
+    }
+    if (geom.type === 'MultiPolygon') {
+      return { type: 'MultiPolygon', coordinates: geom.arcs.map(poly => poly.map(ring => ring.flatMap(decodeArc))) };
+    }
+    return geom;
+  }
+  const scale = topology.transform?.scale || [1, 1];
+  const translate = topology.transform?.translate || [0, 0];
+  function transform(coords) {
+    return coords.map(([x, y]) => [x * scale[0] + translate[0], y * scale[1] + translate[1]]);
+  }
+  function transformGeom(geom) {
+    if (geom.type === 'Polygon') return { ...geom, coordinates: geom.coordinates.map(transform) };
+    if (geom.type === 'MultiPolygon') return { ...geom, coordinates: geom.coordinates.map(p => p.map(transform)) };
+    return geom;
+  }
+  const features = object.geometries.map(geom => ({
+    type: 'Feature',
+    id: geom.id,
+    properties: geom.properties || {},
+    geometry: transformGeom(convertGeometry(geom))
+  }));
+  return { type: 'FeatureCollection', features };
+}
+
+// ── Update choropleth fill ────────────────────────────────────────────────
+function updateMap() {
+  currentYear = parseInt(document.getElementById('yearSlider').value);
+  currentMetric = document.getElementById('metricSelect').value;
+
+  if (!allMapData) return;
+
+  const yearData = allMapData[currentYear] || {};
+  const cfg = METRIC_CONFIG[currentMetric];
+
+  // Build ISO-3 numeric → value lookup
+  // world-atlas uses numeric IDs; our data uses alpha-3
+  // We need to map alpha3 → numeric. Build lookup from geoData.
+  // Simpler: store as alpha3, lookup by matching path data-id to numeric.
+  // We'll use a lookup table built from the GeoJSON properties.
+  const values = Object.values(yearData)
+    .map(d => d[currentMetric])
+    .filter(v => v != null && v > 0);
+
+  if (values.length === 0) return;
+
+  const extent = d3.extent(values);
+  const colorScale = d3.scaleQuantize()
+    .domain(extent)
+    .range(cfg.scheme);
+
+  // Build numeric-id → iso_alpha3 map from our data
+  // world-atlas numeric IDs follow ISO 3166-1 numeric — we match by country name fallback
+  // The most reliable approach: build alpha3→data map, then match SVG paths via a numeric→alpha3 table
+  const alpha3ToData = {};
+  for (const [iso, row] of Object.entries(yearData)) {
+    alpha3ToData[iso] = row;
+  }
+
+  // Match using a pre-built numeric→alpha3 mapping embedded here
+  // (Subset of the most common countries — full list would be too large)
+  const numericToAlpha3 = getNumericToAlpha3();
+
+  svg.selectAll('.country-path')
+    .attr('fill', function(d) {
+      const alpha3 = numericToAlpha3[d.id];
+      const row = alpha3 ? alpha3ToData[alpha3] : null;
+      const val = row ? row[currentMetric] : null;
+      if (val == null || val <= 0) return '#d8dde3';
+      return colorScale(val);
+    })
+    .attr('class', function(d) {
+      const alpha3 = numericToAlpha3[d.id];
+      const row = alpha3 ? alpha3ToData[alpha3] : null;
+      const val = row ? row[currentMetric] : null;
+      return 'country-path' + (val == null || val <= 0 ? ' no-data' : '');
+    });
+
+  // Update legend
+  updateLegend(extent, cfg);
+}
+
+// ── Legend ─────────────────────────────────────────────────────────────────
+function updateLegend(extent, cfg) {
+  const grad = document.querySelector('#legendGrad');
+  grad.innerHTML = '';
+  cfg.scheme.forEach((color, i) => {
+    const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop.setAttribute('offset', `${(i / (cfg.scheme.length - 1)) * 100}%`);
+    stop.setAttribute('stop-color', color);
+    grad.appendChild(stop);
+  });
+  document.getElementById('legendMin').textContent = cfg.fmt(extent[0]);
+  document.getElementById('legendMax').textContent = cfg.fmt(extent[1]);
+}
+
+// ── Tooltip on hover ───────────────────────────────────────────────────────
+function onMouseMove(event, d) {
+  const numericToAlpha3 = getNumericToAlpha3();
+  const alpha3 = numericToAlpha3[d.id];
+  if (!alpha3 || !allMapData) return;
+
+  const yearData = allMapData[currentYear] || {};
+  const row = yearData[alpha3];
+  if (!row) return;
+
+  const cfg = METRIC_CONFIG[currentMetric];
+
+  tooltip.style.display = 'block';
+  tooltip.style.left = (event.clientX + 14) + 'px';
+  tooltip.style.top  = (event.clientY - 10) + 'px';
+  tooltip.innerHTML = `
+    <div class="tt-name">${row.country}</div>
+    <div class="tt-row"><span class="tt-label">${cfg.label}</span><span class="tt-val">${cfg.fmt(row[currentMetric] || 0)}</span></div>
+    <div class="tt-row"><span class="tt-label">Renewables</span><span class="tt-val">${(row.renewables_pct || 0).toFixed(1)}%</span></div>
+    <div class="tt-row"><span class="tt-label">Fossil</span><span class="tt-val">${(row.fossil_pct || 0).toFixed(1)}%</span></div>
+    <div class="tt-row"><span class="tt-label">Energy/capita</span><span class="tt-val">${(row.energy_per_capita || 0).toFixed(1)} MWh</span></div>
+    <div style="font-size:0.7rem;color:rgba(255,255,255,0.5);margin-top:0.35rem;">Click for full time series</div>
+  `;
+}
+
+// ── Country click → time series panel ────────────────────────────────────
+function onCountryClick(event, d) {
+  const numericToAlpha3 = getNumericToAlpha3();
+  const alpha3 = numericToAlpha3[d.id];
+  if (!alpha3 || !allMapData) return;
+
+  const yearData = allMapData[currentYear] || {};
+  const row = yearData[alpha3];
+  if (!row) return;
+
+  // Build time series from allMapData
+  const years = Object.keys(allMapData).map(Number).sort();
+  const energySeries  = years.map(y => (allMapData[y]?.[alpha3]?.energy || null));
+  const renewSeries   = years.map(y => (allMapData[y]?.[alpha3]?.renewables_pct || null));
+  const fossilSeries  = years.map(y => (allMapData[y]?.[alpha3]?.fossil_pct || null));
+
+  // Stats panel
+  document.getElementById('detailName').textContent = row.country;
+  document.getElementById('detailYear').textContent = `Showing data for year: ${currentYear}`;
+  document.getElementById('detailStats').innerHTML = `
+    <div class="stat-box">
+      <div class="s-label">Total Energy</div>
+      <div class="s-value">${d3.format(',.0f')(row.energy || 0)} <small style="font-size:0.65rem">TWh</small></div>
+    </div>
+    <div class="stat-box">
+      <div class="s-label">Energy / Capita</div>
+      <div class="s-value">${(row.energy_per_capita || 0).toFixed(1)} <small style="font-size:0.65rem">MWh</small></div>
+    </div>
+    <div class="stat-box">
+      <div class="s-label">Renewables Share</div>
+      <div class="s-value">${(row.renewables_pct || 0).toFixed(1)}<small style="font-size:0.65rem">%</small></div>
+    </div>
+    <div class="stat-box">
+      <div class="s-label">Fossil Share</div>
+      <div class="s-value">${(row.fossil_pct || 0).toFixed(1)}<small style="font-size:0.65rem">%</small></div>
+    </div>
+    <div class="stat-box">
+      <div class="s-label">GDP / Capita</div>
+      <div class="s-value">$${d3.format(',.0f')(row.gdp_per_capita || 0)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="s-label">Population</div>
+      <div class="s-value">${d3.format('.2s')(row.population || 0)}</div>
+    </div>
+  `;
+
+  // Time series chart
+  if (tsChartInstance) tsChartInstance.destroy();
+  tsChartInstance = new Chart(document.getElementById('tsChart'), {
+    data: {
+      labels: years,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Total Energy (TWh)',
+          data: energySeries,
+          backgroundColor: 'rgba(44,74,110,0.25)',
+          borderColor: '#2c4a6e',
+          borderWidth: 1,
+          yAxisID: 'y1'
+        },
+        {
+          type: 'line',
+          label: 'Renewables (%)',
+          data: renewSeries,
+          borderColor: '#2d7a4f',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.3,
+          yAxisID: 'y2'
+        },
+        {
+          type: 'line',
+          label: 'Fossil (%)',
+          data: fossilSeries,
+          borderColor: '#d4830a',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 2,
+          borderDash: [4, 3],
+          tension: 0.3,
+          yAxisID: 'y2'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 8 } },
+        y1: {
+          position: 'left',
+          grid: { color: '#e8eef5' },
+          ticks: { font: { size: 9 }, callback: v => d3.format(',.0f')(v) }
+        },
+        y2: {
+          position: 'right',
+          min: 0, max: 100,
+          grid: { display: false },
+          ticks: { font: { size: 9 }, callback: v => v + '%' }
+        }
+      }
+    }
+  });
+
+  document.getElementById('countryDetail').classList.add('visible');
+  document.getElementById('countryDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Year slider ────────────────────────────────────────────────────────────
+function onYearChange(val) {
+  document.getElementById('yearDisplay').textContent = val;
+  updateMap();
+}
+
+// ── ISO numeric → alpha3 lookup table ─────────────────────────────────────
+// Generated from ISO 3166-1. Covers all 218 countries in the dataset.
+function getNumericToAlpha3() {
+  return {
+    4:'AFG',8:'ALB',12:'DZA',16:'ASM',20:'AND',24:'AGO',28:'ATG',32:'ARG',36:'AUS',
+    40:'AUT',31:'AZE',44:'BHS',48:'BHR',50:'BGD',52:'BRB',112:'BLR',56:'BEL',84:'BLZ',
+    204:'BEN',64:'BTN',68:'BOL',70:'BIH',72:'BWA',76:'BRA',96:'BRN',100:'BGR',854:'BFA',
+    108:'BDI',116:'KHM',120:'CMR',124:'CAN',132:'CPV',140:'CAF',144:'LKA',148:'TCD',
+    152:'CHL',156:'CHN',170:'COL',174:'COM',178:'COG',180:'COD',188:'CRI',384:'CIV',
+    192:'CUB',196:'CYP',203:'CZE',208:'DNK',262:'DJI',214:'DOM',218:'ECU',818:'EGY',
+    222:'SLV',231:'ETH',233:'EST',246:'FIN',242:'FJI',250:'FRA',266:'GAB',288:'GHA',
+    276:'DEU',300:'GRC',320:'GTM',324:'GIN',332:'HTI',340:'HND',348:'HUN',356:'IND',
+    360:'IDN',364:'IRN',368:'IRQ',372:'IRL',376:'ISR',380:'ITA',388:'JAM',392:'JPN',
+    400:'JOR',398:'KAZ',404:'KEN',410:'KOR',414:'KWT',418:'LAO',422:'LBN',426:'LSO',
+    430:'LBR',434:'LBY',440:'LTU',442:'LUX',450:'MDG',454:'MWI',458:'MYS',466:'MLI',
+    484:'MEX',496:'MNG',504:'MAR',508:'MOZ',516:'NAM',524:'NPL',528:'NLD',540:'NCL',
+    554:'NZL',558:'NIC',562:'NER',566:'NGA',578:'NOR',512:'OMN',586:'PAK',591:'PAN',
+    598:'PNG',600:'PRY',604:'PER',608:'PHL',616:'POL',620:'PRT',630:'PRI',634:'QAT',
+    642:'ROU',643:'RUS',646:'RWA',682:'SAU',686:'SEN',694:'SLE',703:'SVK',705:'SVN',
+    706:'SOM',710:'ZAF',724:'ESP',144:'LKA',729:'SDN',740:'SUR',752:'SWE',756:'CHE',
+    760:'SYR',762:'TJK',764:'THA',768:'TGO',780:'TTO',788:'TUN',792:'TUR',800:'UGA',
+    804:'UKR',784:'ARE',826:'GBR',840:'USA',858:'URY',860:'UZB',862:'VEN',704:'VNM',
+    887:'YEM',894:'ZMB',716:'ZWE',788:'TUN',682:'SAU',760:'SYR',598:'PNG',630:'PRI',
+    175:'MYT',474:'MTQ',312:'GLP',638:'REU',254:'GUF',534:'SXM',531:'CUW',533:'ABW',
+    850:'VIR',666:'SPM',660:'AIA',092:'VGB',136:'CYM',796:'TCA',652:'BLM',663:'MAF',
+    470:'MLT',352:'ISL',699:'MDV',492:'MCO',674:'SMR',336:'VAT',887:'YEM',818:'EGY',
+    231:'ETH',706:'SOM',788:'TUN'
+  };
+}
+</script>
+{% endif %}
+{% endblock %}

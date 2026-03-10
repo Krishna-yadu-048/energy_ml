@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% set active_page = "results" %}
+
+{% block title %}Results — Energy ML Dashboard{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <div class="page-header">
+    <h1>Model Comparison Results</h1>
+    <p>Test set evaluation (2018–2022) across six regression models. Metrics are on the original TWh scale.</p>
+  </div>
+
+  {% if not results %}
+  <div class="callout amber">
+    No results found. Run <code>python app/train_models.py</code> first.
+  </div>
+  {% else %}
+
+  <!-- Best-per-metric summary row -->
+  <div class="grid-4 mb-2">
+    {% for metric, label in [('RMSE','Best RMSE'),('MAE','Best MAE'),('R2','Best R²'),('MAPE','Best MAPE')] %}
+    {% if best and metric in best %}
+    {% set bname = best[metric] %}
+    <div class="metric-card best">
+      <div class="metric-label">{{ label }}</div>
+      <div class="metric-value">
+        {% if metric == 'R2' %}
+          {{ results[bname][metric] }}
+        {% elif metric == 'MAPE' %}
+          {{ results[bname][metric] }}%
+        {% else %}
+          {{ "{:,.0f}".format(results[bname][metric]) }}
+        {% endif %}
+      </div>
+      <div class="metric-name">{{ model_display.get(bname, bname) }}</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- Full results table -->
+  <div class="card mt-3">
+    <div class="card-title">Full Results Table</div>
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>RMSE ↓</th>
+          <th>MAE ↓</th>
+          <th>R² ↑</th>
+          <th>MAPE ↓</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, metrics in results.items() %}
+        <tr>
+          <td>{{ model_display.get(key, key) }}</td>
+          <td class="{% if best and best.get('RMSE') == key %}cell-best{% endif %}">
+            {{ "{:,.1f}".format(metrics.RMSE) }}
+          </td>
+          <td class="{% if best and best.get('MAE') == key %}cell-best{% endif %}">
+            {{ "{:,.1f}".format(metrics.MAE) }}
+          </td>
+          <td class="{% if best and best.get('R2') == key %}cell-best{% endif %}">
+            {{ metrics.R2 }}
+          </td>
+          <td class="{% if best and best.get('MAPE') == key %}cell-best{% endif %}">
+            {{ metrics.MAPE }}%
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-muted mt-1" style="font-size:0.75rem;">
+      Green = best value for that metric. Arrows indicate preferred direction (↓ lower is better, ↑ higher is better).
+    </p>
+  </div>
+
+  <!-- Charts row -->
+  <div class="grid-2 mt-3">
+    <div class="chart-wrap">
+      <div class="chart-title">RMSE by Model</div>
+      <div class="chart-sub">Lower is better. Root Mean Squared Error (TWh).</div>
+      <canvas id="chartRMSE" height="240"></canvas>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">R² Score by Model</div>
+      <div class="chart-sub">Higher is better. Proportion of variance explained.</div>
+      <canvas id="chartR2" height="240"></canvas>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">MAE by Model</div>
+      <div class="chart-sub">Mean Absolute Error in TWh.</div>
+      <canvas id="chartMAE" height="240"></canvas>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">MAPE by Model</div>
+      <div class="chart-sub">Mean Absolute Percentage Error (%).</div>
+      <canvas id="chartMAPE" height="240"></canvas>
+    </div>
+  </div>
+
+  <!-- Feature importance -->
+  {% if feature_importance %}
+  <div class="card mt-3">
+    <div class="card-title">Feature Importance</div>
+    <p class="text-muted mb-2" style="font-size:0.82rem;">
+      Available for tree-based models (Random Forest, Gradient Boosting) and Ridge (absolute coefficients).
+      Values are normalised to sum to 1.
+    </p>
+
+    <div class="tab-bar">
+      {% for name in feature_importance.keys() %}
+      <button class="tab-btn {% if loop.first %}active{% endif %}"
+              onclick="showTab('fi-{{ name }}', this)">
+        {{ model_display.get(name, name) }}
+      </button>
+      {% endfor %}
+    </div>
+
+    {% for name, importances in feature_importance.items() %}
+    <div id="fi-{{ name }}" class="tab-panel {% if loop.first %}active{% endif %}">
+      {% set total = importances.values() | sum %}
+      {% for feat, val in importances.items() | sort(attribute=1, reverse=True) %}
+      <div class="fi-row">
+        <div class="fi-label">{{ feat }}</div>
+        <div class="fi-bar-wrap">
+          <div class="fi-bar" style="width: {{ ((val / total * 100) if total > 0 else 0) | round(1) }}%"></div>
+        </div>
+        <div class="fi-value">{{ "{:.3f}".format(val) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Pass results from server to JS
+  const results = {{ results | tojson }};
+  const modelDisplay = {{ model_display | tojson }};
+
+  const labels = Object.keys(results).map(k => modelDisplay[k] || k);
+  const NAVY = '#2c4a6e';
+  const AMBER = '#d4830a';
+
+  const barDefaults = (data, color) => ({
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: color, borderRadius: 3, borderSkipped: false }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { grid: { color: '#e8eef5' }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartRMSE'), barDefaults(
+    Object.values(results).map(r => r.RMSE), NAVY
+  ));
+
+  new Chart(document.getElementById('chartR2'), barDefaults(
+    Object.values(results).map(r => r.R2), AMBER
+  ));
+
+  new Chart(document.getElementById('chartMAE'), barDefaults(
+    Object.values(results).map(r => r.MAE), NAVY
+  ));
+
+  new Chart(document.getElementById('chartMAPE'), barDefaults(
+    Object.values(results).map(r => r.MAPE), AMBER
+  ));
+
+  function showTab(id, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+  }
+</script>
+{% endblock %}
