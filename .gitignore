@@ -45,8 +45,7 @@ app/static/map_data.json
 app/static/map_meta.json
 app/static/map_rankings.json
 app/static/predictions.csv
-app/static/eda_*.png
-app/static/map_*.png
+
 
 # ── OS files ───────────────────────────────────────────────────────────────────
 .DS_Store

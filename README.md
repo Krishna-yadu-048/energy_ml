@@ -9,7 +9,7 @@
 
 This project compares six machine learning regression models on the task of predicting a country's primary energy consumption (TWh) given its economic and energy characteristics. The dataset covers 218 countries from 1990 to 2022 and comes from Our World in Data's World Energy Consumption collection.
 
-I chose this problem because the data is messy in ways that actually matter. The target variable has a skewness of around 8 in raw form — the United States and China dwarf almost every other country — and there are meaningful missing values throughout. Several columns look like useful predictors until you notice they are direct arithmetic sub-components of the target, which would be data leakage. Working through those issues turned out to be more instructive than the model selection itself.
+The reason for selecting the given problem is because the data is messy in ways that actually matter. The target variable has a skewness of around 8 in raw form — the United States and China dwarf almost every other country — and there are meaningful missing values throughout. Several columns look like useful predictors until you notice they are direct arithmetic sub-components of the target, which would be data leakage. Working through those issues turned out to be more instructive than the model selection itself.
 
 ---
 
@@ -114,7 +114,7 @@ A gallery of the exploratory analysis plots with written commentary — target d
 
 An interactive D3.js choropleth coloured entirely from the OWID dataset. A metric dropdown (six options: total energy, energy per capita, renewables share, fossil share, electricity generation, GDP per capita) and a year slider (1990–2022) let you explore how the global energy picture has shifted over time. Clicking any country opens a detail panel with six stat boxes and a combined bar/line time series chart showing total energy alongside renewables and fossil share across all available years.
 
-<img src="app/static/screenshots/map.png" width="700" alt="World map page"/>
+<img src="app/static/screenshots/worldmap.png" width="700" alt="World map page"/>
 
 <img src="app/static/map_elec_mix.png" width="700" alt="Electricity mix by country 2021"/>
 
