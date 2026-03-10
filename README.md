@@ -114,7 +114,7 @@ A gallery of the exploratory analysis plots with written commentary — target d
 
 An interactive D3.js choropleth coloured entirely from the OWID dataset. A metric dropdown (six options: total energy, energy per capita, renewables share, fossil share, electricity generation, GDP per capita) and a year slider (1990–2022) let you explore how the global energy picture has shifted over time. Clicking any country opens a detail panel with six stat boxes and a combined bar/line time series chart showing total energy alongside renewables and fossil share across all available years.
 
-<img src="app/static/screenshots/worldmap.png" width="700" alt="World map page"/>
+<img src="app/static/worldmap.png" width="700" alt="World map page"/>
 
 <img src="app/static/map_elec_mix.png" width="700" alt="Electricity mix by country 2021"/>
 

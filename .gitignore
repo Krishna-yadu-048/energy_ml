@@ -1,0 +1,63 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+appz/
+
+# ── Jupyter ────────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Environment variables / secrets ───────────────────────────────────────────
+.env
+.env.*
+*.env
+secrets.py
+config.local.py
+
+# ── Data files (too large for GitHub) ─────────────────────────────────────────
+data/World_Energy_Consumption.csv
+data/processed_data.csv
+data/train.csv
+data/val.csv
+data/test.csv
+
+# ── Trained model files (too large for GitHub) ────────────────────────────────
+models/*.pkl
+models/results.json
+models/feature_importance.json
+models/meta.json
+
+# ── Generated static assets (reproduced by running notebooks) ─────────────────
+app/static/map_data.json
+app/static/map_meta.json
+app/static/map_rankings.json
+app/static/predictions.csv
+
+
+# ── OS files ───────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE / editor ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+uvicorn.log
